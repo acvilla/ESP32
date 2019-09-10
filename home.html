@@ -1,0 +1,264 @@
+<html>
+	<head>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js" type="text/javascript"></script>
+	<script type="text/javascript" src="main.js"></script>
+	<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+	<style>
+/* Mobile Styles */
+@media only screen and (max-width: 400px) {
+  body {
+    background-color: #F09A9D; /* Red */
+  }
+  .container {
+	margin: auto;
+	width: 100%;
+	font-size: 50px;
+}
+
+a {
+	font-size:50px;
+	color:#330;
+	text-decoration:none;
+}
+  
+  
+}
+
+/* Desktop Styles */
+@media only screen and (min-width: 961px) {
+  body {
+    background-color: #FFFFFF; 
+  }
+  .container {
+			margin:auto;
+			margin-top: 400px;
+			width: 70%;
+			display: flex;
+			font-size: 30px;
+  			align-items: center;
+  			justify-content: center;
+  			flex-direction: column;
+}
+
+a {
+	font-size:30px;
+	color:#330;
+	text-decoration:none;
+}
+ 
+}
+	</style>
+	
+</head>
+<body>
+	<div class="container">
+			<div id="chart_div_rpm"></div>
+			<canvas id="battery" width=200 height=100></canvas>
+            <h1><span id="percentage"></span>%</h1>
+            <h3>Time of last heartbeat: <span id="heartBeat"></span></h3>
+            <h3><span id="error" style="color: red; display:none;">Communications Error</span><h3>
+
+
+	</div>
+
+	<script type="text/javascript">
+var currentPerc = 100;
+var rpm = 0;
+var battery = 100;
+var heartBeatTime = "N/A";
+var c_id = null;
+var canvas = document.getElementById('battery');
+document.getElementById("percentage").innerHTML = currentPerc;
+document.getElementById("heartBeat").innerHTML = heartBeatTime;
+
+var context = canvas.getContext('2d');
+
+function drawBorders() {
+context.beginPath();
+context.rect(5, 5, 180, 90);
+context.lineWidth = 10;
+context.strokeStyle = 'black';
+context.stroke();
+
+context.beginPath();
+context.rect(190, 40, 10, 20);
+context.fillStyle = 'black';
+context.fill();
+context.stroke();
+
+}
+
+function drawPercentage(percentage) {
+	clearPercentage();
+	context.beginPath();
+	context.rect(10, 10, 170 * (percentage/100), 80);
+	context.fillStyle = 'rgb('+ Math.floor((1-(percentage/100))*255) + ',' + Math.floor((percentage/100)*255) + ',0)';
+	
+	context.fill();
+}
+
+function clearPercentage() {
+	context.clearRect(10, 10, 170, 80);
+}
+
+drawBorders();
+
+setInterval(function() {
+	currentPerc = Math.floor(battery);
+	drawPercentage(currentPerc);
+	document.getElementById("percentage").innerHTML = currentPerc;
+
+	
+}, 20); 
+		// Create a client instance
+function makeid(length) {
+   var result           = '';
+   var characters       = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+   var charactersLength = characters.length;
+   for ( var i = 0; i < length; i++ ) {
+      result += characters.charAt(Math.floor(Math.random() * charactersLength));
+   }
+   console.log(result);
+   return result;
+}
+var client_id = makeid(64);
+client = new Paho.MQTT.Client("broker.mqttdashboard.com", Number(8000), client_id);
+
+// set callback handlers
+client.onConnectionLost = onConnectionLost;
+client.onMessageArrived = onMessageArrived;
+
+// connect the client
+client.connect({onSuccess:onConnect});
+
+// called when the client connects
+function onConnect() {
+  // Once a connection has been made, make a subscription and send a message.
+  console.log("onConnect");
+  client.subscribe("ebike/#");
+  //message = new Paho.MQTT.Message("Hello from " + client_id);
+  //message.destinationName = "ebike/*/connectionStatus";
+  //client.send(message);
+}
+
+// called when the client loses its connection
+function onConnectionLost(responseObject) {
+  if (responseObject.errorCode !== 0) {
+    console.log("onConnectionLost:"+responseObject.errorMessage);
+  }
+}
+
+// called when a message arrives
+function onMessageArrived(message) {
+  console.log("onMessageArrived:"+message.payloadString);
+  try{
+    obj = JSON.parse(message.payloadString);
+	var objects = [];
+	rpmKey = "RPM";
+	batteryKey = "Battery";
+	heartBeatTimeKey = "HeartBeatTime";
+	errorKey = "Error";
+	c_idKey = "C_ID";
+
+	if (c_id === null){
+		for (var i in obj) {
+        	if (!obj.hasOwnProperty(i)) continue;
+        	if (i == c_idKey) {
+            	c_id = obj[i];
+            	console.log(c_id);
+            	client.unsubscribe("ebike/"); 
+            	client.subscribe("ebike/" + c_id); // subscribe to client-specific topic to avoid erroneous messages on broker
+        	}	
+		}
+	} else {
+		// Check if incoming msg c_id matches the c_id we're connected to
+		var incoming_id;
+		for (var i in obj) {
+        	if (!obj.hasOwnProperty(i)) continue;
+        	if (i == c_idKey) {
+           		incoming_id = obj[i];
+           		console.log(incoming_id);
+       		}
+		}
+
+		if (c_id == incoming_id){
+			for (var i in obj) {
+				//console.log(i);
+        		if (i == rpmKey) {
+            		rpm = obj[i];
+            		//console.log(rpm);
+        		} else if (i == batteryKey) {
+            		battery = obj[i];
+            		//console.log(battery);
+        		} else if (i == heartBeatTimeKey) {
+            		heartBeatTime = obj[i];
+            		//console.log(heartBeatTime);
+            		var epochDiffSeconds = 946684800;
+            		var utcSeconds = epochDiffSeconds + parseInt(heartBeatTime);
+            		//console.log(utcSeconds);
+					var d = new Date(0); // The 0 there is the key, which sets the date to the epoch
+					d.setUTCSeconds(utcSeconds);
+					//console.log(d);
+            		document.getElementById("heartBeat").innerHTML = d;
+        		} else if (i == "Error"){
+        			error = obj[i];
+        			console.log("Error");
+        			if (error.Code == 100){
+        				console.log("Code");
+        				if (error.Status == true){
+        					console.log("True");
+       						document.getElementById("error").style.display = 'inline';
+      					} else {
+      						console.log("False");
+  							document.getElementById("error").style.display = 'none';
+        				}			
+        			}
+    			}
+			} 
+		} else {
+			console.log ("Incoming msg rejected due to invalid client id: " + incoming_id);
+		}
+	}		 
+    //console.log(message.payloadString);
+  } catch(e){
+  	console.log(message.payloadString);
+  }
+
+}
+		google.charts.load('current', {'packages':['gauge']});
+		google.charts.setOnLoadCallback(drawChartRPM);
+
+		function drawChartRPM() {
+
+			var rpm_data = google.visualization.arrayToDataTable([
+				['Label', 'Value'],
+				['MPH', 20],
+				]);
+
+			var options_rpm = {
+				animation:{
+          			duration: 50,
+          			easing: 'inAndOut',
+        		},
+				width: 700, height: 700,
+				redFrom: 35, redTo: 50,
+				yellowFrom:25, yellowTo: 35,
+				minorTicks: 10,
+				majorTicks: ['0','10','20','30','40','50'],
+				max: 50
+			};
+
+			var chart_rpm = new google.visualization.Gauge(document.getElementById('chart_div_rpm'));
+
+			chart_rpm.draw(rpm_data, options_rpm);
+
+			setInterval(function() {
+				rpm_data.setValue(0, 1, rpm);
+				chart_rpm.draw(rpm_data, options_rpm);
+			}, 200);
+		}
+		
+
+	</script>
+</body>
+</html>
