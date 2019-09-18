@@ -35,9 +35,9 @@ c = Client(c_id, "broker.mqttdashboard.com", topic="ebike/" + c_id) # Initialize
 
 while True:
     c.start()
-    time.sleep(0.1)
+    time.sleep(1)
     c.read_data()
-    time.sleep(0.1)
+    time.sleep(1)
 
 
 

@@ -77,9 +77,22 @@ class Client:
         #print('events =', events)
         bytes_string = uart.readline();
         try:
-            self.buf = str(bytes_string, 'utf-8', 'ignore')
-            print("Received: ", self.buf)
+            jsonstr = str(bytes_string, 'utf-8', 'ignore')
+            msg = json.loads(jsonstr);
+            if 'RPM' in msg and 'Battery' in msg:
+                # msg is in a valid format
+                obj = {
+                    "C_ID": self.client.client_id,
+                    "RPM": msg["RPM"],
+                    "Battery": msg["Battery"] 
+                }
+                self.buf = json.dumps(obj)
+                print("Received: ", self.buf)
+            else:
+                print("Invalid Format!")
         except:
+            jsonstr = str(bytes_string, 'utf-8', 'ignore')
+            print(jsonstr)
             self.buf = json.dumps(self.errorMsg["commsErrorRaised"])
             self.commsActive = False
         else:
