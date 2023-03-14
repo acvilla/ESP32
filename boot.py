@@ -6,7 +6,7 @@ def connect():
     if not sta_if.isconnected():
         print('connecting to network...')
         sta_if.active(True)
-        sta_if.connect('Harambe', 'FranzKafka17')
+        sta_if.connect('wifi', 'password')
         while not sta_if.isconnected():
             pass
     print('network config:', sta_if.ifconfig())
